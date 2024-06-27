@@ -1,28 +1,12 @@
 #include "ManifestManager.hpp"
 
+#include "DownloadManager.hpp"
+
 #include <iostream>
-#include <curl/curl.h>
 
 void downloadManifest(const std::string &downloadUrl, const std::filesystem::path &outPath, const std::string &outFile) {
-    CURL* curl = curl_easy_init();
-    
-    if (!curl) {
-        throw std::runtime_error("Failed to init CURL handle.");
-    }
-
-    if(!std::filesystem::exists(outPath)) {
-        std::filesystem::create_directory(outPath);
-    }
-
-    curl_easy_setopt(curl, CURLOPT_URL, downloadUrl.c_str());
-
-    FILE* file = std::fopen(std::string(outPath.string() + "/" + outFile).c_str(), "w");
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
-    std::cout << "Downloading VDF Manifest file from \"" << downloadUrl << "\"" << " to " << outPath.string() + '/' + outFile << std::endl;
-    CURLcode res = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-    std::fclose(file);
+    DownloadManager downloadManager(downloadUrl, outPath, outFile);
+    downloadManager.DownloadFile();
 }
 
 ManifestManager::ManifestManager(const std::filesystem::path& vdfPath)

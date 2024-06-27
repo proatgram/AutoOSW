@@ -21,6 +21,8 @@ add_executable(OSWUpdate
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/main.cpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/ManifestManager.cpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/ManifestManager.hpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/DownloadManager.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/DownloadManager.hpp>
 )
 
 target_link_libraries(OSWUpdate
