@@ -1,3 +1,12 @@
+cmake_minimum_required(VERSION 3.12.0)
+
+project(AutoOSW
+    VERSION 0.1
+    DESCRIPTION "An updater and header generation tool for OpenSteamworks"
+    HOMEPAGE_URL "https://github.com/proatgram/AutoOSW"
+    LANGUAGES CXX
+)
+
 include(FetchContent)
 
 fetchcontent_declare(
@@ -17,22 +26,23 @@ fetchcontent_makeavailable(ValveFileVDF argparse)
 find_package(CURL REQUIRED)
 
 # Target OSWUpdate
-add_executable(OSWUpdate
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/main.cpp>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/ManifestManager.cpp>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/ManifestManager.hpp>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/DownloadManager.cpp>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/OSWUpdate/DownloadManager.hpp>
+add_executable(AutoOSW
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/main.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/ManifestManager.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/ManifestManager.hpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/DownloadManager.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/DownloadManager.hpp>
 )
 
-target_link_libraries(OSWUpdate
+target_link_libraries(AutoOSW
     PRIVATE
         ValveFileVDF::ValveFileVDF
         argparse
         ${CURL_LIBRARY_RELEASE}
 )
 
-target_include_directories(OSWUpdate
+target_include_directories(AutoOSW
     PRIVATE
         ${CURL_INCLUDE_DIR}
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
