@@ -50,6 +50,8 @@ class ManifestManager {
          */
         ManifestEntry Get(const std::string &key) const;
 
+        const std::vector<ManifestEntry>& GetEntries() const;
+
         // Recomended VDF Manifest, can specify different one in constructor though.
         static constexpr std::string_view MANIFEST_URL = "https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/ClientManifest/steam_client_ubuntu12";
     private:

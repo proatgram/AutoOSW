@@ -24,6 +24,7 @@ fetchcontent_declare(
 fetchcontent_makeavailable(ValveFileVDF argparse)
 
 find_package(CURL REQUIRED)
+find_package(LIBZIP REQUIRED)
 
 # Target OSWUpdate
 add_executable(AutoOSW
@@ -32,12 +33,15 @@ add_executable(AutoOSW
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/ManifestManager.hpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/DownloadManager.cpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/DownloadManager.hpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/ExtractionManager.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/ExtractionManager.hpp>
 )
 
 target_link_libraries(AutoOSW
     PRIVATE
         ValveFileVDF::ValveFileVDF
         argparse
+        libzip::zip
         ${CURL_LIBRARY_RELEASE}
 )
 

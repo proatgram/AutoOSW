@@ -11,7 +11,7 @@ static std::size_t curlDownloadCallback(char *data, std::size_t dataSize, std::s
     if (!file.is_open()) {
         // Make sure the directory exists before we open a file to it.
         if (!std::filesystem::exists(downloadManager->GetDownloadDirectory())) {
-            std::filesystem::create_directory(downloadManager->GetDownloadDirectory());
+            std::filesystem::create_directories(downloadManager->GetDownloadDirectory());
         }
 
         file.open(downloadManager->GetDownloadDirectory().string() + '/' + downloadManager->GetDownloadFileName(), std::fstream::trunc | std::fstream::out);
@@ -24,6 +24,7 @@ static std::size_t curlDownloadCallback(char *data, std::size_t dataSize, std::s
     std::char_traits<char>::pos_type positionBefore = file.tellp();
 
     file.write(data, dataSize * dataCount);
+    file.flush();
 
     std::char_traits<char>::pos_type numberOfBytesWritten = file.tellp() - positionBefore;
     return static_cast<std::size_t>(numberOfBytesWritten);

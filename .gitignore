@@ -34,3 +34,4 @@
 # LSP
 .cache/
 compile_commands.json
+build/

@@ -86,3 +86,7 @@ ManifestEntry ManifestManager::Get(const std::string &key) const {
 
     return *iterator;
 }
+
+const std::vector<ManifestEntry>& ManifestManager::GetEntries() const {
+    return m_entries;
+}
