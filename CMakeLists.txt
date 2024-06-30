@@ -21,7 +21,23 @@ fetchcontent_declare(
     GIT_TAG "v3.0"
 )
 
+fetchcontent_declare(
+    steamworks_dumper
+    GIT_REPOSITORY "https://github.com/Rosentti/steamworks_dumper.git"
+    GIT_TAG "aff06a02124bf0bd573249257c071c4ed8f8e42a"
+)
+
 fetchcontent_makeavailable(ValveFileVDF argparse)
+
+if(NOT steamworks_dumper_POPULATED)
+    fetchcontent_populate(steamworks_dumper)
+    execute_process(
+        COMMAND git apply ${CMAKE_SOURCE_DIR}/steamworks_dumper_lib.patch
+        WORKING_DIRECTORY ${steamworks_dumper_SOURCE_DIR}
+    )
+
+    add_subdirectory(${steamworks_dumper_SOURCE_DIR})
+endif()
 
 find_package(CURL REQUIRED)
 find_package(LIBZIP REQUIRED)
@@ -42,6 +58,7 @@ target_link_libraries(AutoOSW
         ValveFileVDF::ValveFileVDF
         argparse
         libzip::zip
+        steamworks_dumper
         ${CURL_LIBRARY_RELEASE}
 )
 

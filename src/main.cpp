@@ -32,4 +32,5 @@ int main(int argc, char **argv) {
 
     ExtractionManager ubuntu_12Extraction(ubuntu_12Download.GetDownloadDirectory().string() + '/' + ubuntu_12Download.GetDownloadFileName(), std::filesystem::path("./extracted/"), manifestManager.Get("bins_ubuntu12").name);
     ubuntu_12Extraction.Extract();
+    
 }
