@@ -81,3 +81,19 @@ void ExtractionManager::Extract() {
     }
     std::cout << "Extracted " << m_archive << std::endl;
 }
+
+const std::string& ExtractionManager::GetSourceArchive() const {
+    return m_archive;
+}
+
+std::filesystem::path ExtractionManager::GetFullOutputPath() const {
+    return std::filesystem::path(m_extractionPath.string() + '/' + m_extractedName);
+}
+
+std::filesystem::path ExtractionManager::GetOutputPath() const {
+    return m_extractionPath;
+}
+
+const std::string& ExtractionManager::GetExtractionName() const {
+    return m_extractedName;
+}
