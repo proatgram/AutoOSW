@@ -22,13 +22,20 @@ fetchcontent_declare(
 )
 
 fetchcontent_declare(
+    nlohmann_json
+    GIT_REPOSITORY "https://github.com/nlohmann/json.git"
+    GIT_TAG "v3.11.3"
+)
+
+fetchcontent_declare(
     steamworks_dumper
     GIT_REPOSITORY "https://github.com/Rosentti/steamworks_dumper.git"
     GIT_TAG "aff06a02124bf0bd573249257c071c4ed8f8e42a"
 )
 
-fetchcontent_makeavailable(ValveFileVDF argparse)
+fetchcontent_makeavailable(ValveFileVDF argparse nlohmann_json)
 
+fetchcontent_getproperties(steamworks_dumper)
 if(NOT steamworks_dumper_POPULATED)
     fetchcontent_populate(steamworks_dumper)
     execute_process(
@@ -51,6 +58,8 @@ add_executable(AutoOSW
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/DownloadManager.hpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/ExtractionManager.cpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/ExtractionManager.hpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/JsonManager.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/JsonManager.hpp>
 )
 
 target_link_libraries(AutoOSW
@@ -58,6 +67,7 @@ target_link_libraries(AutoOSW
         ValveFileVDF::ValveFileVDF
         argparse
         libzip::zip
+        nlohmann_json::nlohmann_json
         steamworks_dumper
         ${CURL_LIBRARY_RELEASE}
 )
