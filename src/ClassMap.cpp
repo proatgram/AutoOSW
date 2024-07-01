@@ -1,10 +1,10 @@
-#include "JsonManager.hpp"
+#include "ClassMap.hpp"
 
 #include <fstream>
 
 #include "nlohmann/json.hpp"
 
-JsonManager::JsonFunction::JsonFunction(const std::string &name, std::size_t argc, int32_t interfaceId, int32_t functionId, int32_t fencepost, bool cannotCallInCrossProcess, int32_t address, std::type_index serializedReturn, const std::vector<std::type_index> &serializedArgs) :
+ClassMap::JsonFunction::JsonFunction(const std::string &name, std::size_t argc, int interfaceId, long int functionId, long int fencepost, bool cannotCallInCrossProcess, int32_t address, std::string serializedReturn, const std::vector<std::string> &serializedArgs) :
     name(name),
     argc(argc),
     interfaceId(interfaceId),
@@ -18,7 +18,7 @@ JsonManager::JsonFunction::JsonFunction(const std::string &name, std::size_t arg
 
 }
 
-JsonManager::JsonManager(const std::filesystem::path jsonPath) :
+ClassMap::ClassMap(const std::filesystem::path jsonPath) :
     m_functions()
 {
     std::fstream file(jsonPath, std::fstream::in);
@@ -35,26 +35,34 @@ JsonManager::JsonManager(const std::filesystem::path jsonPath) :
     for (auto function : json.at("functions")) {
         auto args = function.at("serializedargs");
         auto returns = function.at("serializedreturns");
-        std::vector<std::type_index> typeArgs;
+        std::vector<std::string> typeArgs;
 
         for (std::string argType : args) {
-            typeArgs.push_back(JsonManager::GetTypeFromString(argType));
+            typeArgs.push_back(argType);
         }
         
         m_functions.emplace_back(
             function.at("name").get<std::string>(),
-            function.at("argc").get<std::size_t>(),
-            function.at("interface_id").get<int32_t>(),
-            function.at("function_id").get<int32_t>(),
-            function.at("fencepost").get<int32_t>(),
-            function.at("cannotcallincrossproccess").get<bool>(),
+            std::stoi(function.at("argc").get<std::string>()),
+            std::stoi(function.at("interfaceid").get<std::string>()),
+            std::stol(function.at("functionid").get<std::string>()),
+            std::stol(function.at("fencepost").get<std::string>()),
+            (function.at("cannotcallincrossprocess").get<std::string>() == "0" ? false : true),
             std::stoi(function.at("addr").get<std::string>()),
-            (returns.empty() ? typeid(void) : JsonManager::GetTypeFromString(returns.at(0).get<std::string>())),
+            (returns.empty() ? "void" : returns.at(0).get<std::string>()),
             typeArgs
         );
     }
 }
 
-std::type_index JsonManager::GetTypeFromString(const std::string &typeString) {
+const std::vector<ClassMap::JsonFunction>& ClassMap::GetFunctions() const {
+    return m_functions;
+}
 
+const std::string& ClassMap::GetClassName() const {
+    return m_jsonClassName;
+}
+
+int32_t ClassMap::GetFoundAt() const {
+    return m_foundAt;
 }
