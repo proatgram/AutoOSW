@@ -2,6 +2,7 @@
 #include "ExtractionManager.hpp"
 #include "ManifestManager.hpp"
 #include "ClassMap.hpp"
+#include "CallbackMap.hpp"
 
 #include "steamworks_dumper.h"
 #include "argparse/argparse.hpp"
@@ -70,4 +71,6 @@ int main(int argc, char **argv) {
         }
         std::cout << std::endl;
     }
+
+    CallbackMap UserCallbacks(dumpDirectory + '/' + "callbacks.json", 100, "SteamUserCallbacks");
 }

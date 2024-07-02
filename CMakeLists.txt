@@ -58,8 +58,10 @@ add_executable(AutoOSW
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/DownloadManager.hpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/ExtractionManager.cpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/ExtractionManager.hpp>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/JsonFunctionManager.cpp>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/JsonFunctionManager.hpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/ClassMap.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/ClassMap.hpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/CallbackMap.cpp>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/CallbackMap.hpp>
 )
 
 target_link_libraries(AutoOSW
