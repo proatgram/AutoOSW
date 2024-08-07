@@ -4,6 +4,8 @@
 #include "ClassMap.hpp"
 #include "CallbackMap.hpp"
 
+#include "ProtobufDumper/ProtobufDumper.h"
+
 #include "steamworks_dumper.h"
 #include "argparse/argparse.hpp"
 
@@ -53,24 +55,8 @@ int main(int argc, char **argv) {
     }
 
     Dump(steamclientlib, dumpDirectory, true); // Used to be main() of steamworks_dumper
+    ProtobufDumper::ProtobufDumper::DumpProtobufs({std::filesystem::path(steamclientlib)}, dumpDirectory + "/protobufs/"); // Dumps protobufs
 
     ClassMap clientUser(dumpDirectory + '/' + "IClientUserMap.json");
-
-    for (const ClassMap::JsonFunction &function : clientUser.GetFunctions()) {
-        std::cout << "Function name: " << function.name
-                  << "\nArgument count: " << function.argc
-                  << "\nInterface ID: " << function.interfaceId
-                  << "\nFunction ID" << function.functionId
-                  << "\nFencepost: " << function.fencepost
-                  << "\nCannot Call In Cross Process Function: " << function.cannotCallInCrossProcess
-                  << "\nFunction Address: " << function.address
-                  << "\nReturn: " << function.serializedReturn
-                  << "\nArguments: ";
-        for (const std::string &argument : function.serializedArgs) {
-            std::cout << argument + ", ";
-        }
-        std::cout << std::endl;
-    }
-
     CallbackMap UserCallbacks(dumpDirectory + '/' + "callbacks.json", 100, "SteamUserCallbacks");
 }

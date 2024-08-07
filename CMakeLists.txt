@@ -29,22 +29,11 @@ fetchcontent_declare(
 
 fetchcontent_declare(
     steamworks_dumper
-    GIT_REPOSITORY "https://github.com/Rosentti/steamworks_dumper.git"
-    GIT_TAG "aff06a02124bf0bd573249257c071c4ed8f8e42a"
+    GIT_REPOSITORY "https://github.com/proatgram/steamworks_dumper.git"
+    GIT_TAG "e4c2f1e3fe0eae02688cdd51922688091cd2e366"
 )
 
-fetchcontent_makeavailable(ValveFileVDF argparse nlohmann_json)
-
-fetchcontent_getproperties(steamworks_dumper)
-if(NOT steamworks_dumper_POPULATED)
-    fetchcontent_populate(steamworks_dumper)
-    execute_process(
-        COMMAND git apply ${CMAKE_SOURCE_DIR}/steamworks_dumper_lib.patch
-        WORKING_DIRECTORY ${steamworks_dumper_SOURCE_DIR}
-    )
-
-    add_subdirectory(${steamworks_dumper_SOURCE_DIR})
-endif()
+fetchcontent_makeavailable(ValveFileVDF argparse nlohmann_json steamworks_dumper)
 
 find_package(CURL REQUIRED)
 find_package(LIBZIP REQUIRED)
@@ -71,6 +60,7 @@ target_link_libraries(AutoOSW
         libzip::zip
         nlohmann_json::nlohmann_json
         steamworks_dumper
+        protobuf_dumper
         ${CURL_LIBRARY_RELEASE}
 )
 
