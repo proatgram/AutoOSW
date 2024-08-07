@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
         .default_value("./dumped");
     arguments.add_argument("--header-format") // The format to write header files
         .help("The file extention to write for header files")
-        .default_value("h");
+        .default_value("hpp");
 
     try {
         arguments.parse_args(argc, argv);
@@ -47,14 +47,14 @@ int main(int argc, char **argv) {
     ExtractionManager ubuntu_12Extraction(ubuntu_12ArchiveLocation, std::filesystem::path(downloadDirectory + "/extracted/"), manifestManager.Get("bins_ubuntu12").name);
     ubuntu_12Extraction.Extract(); // Extract client libs
 
-    /* Dumps from steamclient.so using steamworks_dumper as a library */
     std::string steamclientlib = ubuntu_12Extraction.GetFullOutputPath().string() + '/' + "ubuntu12_32/steamclient.so";
 
     if (!std::filesystem::exists(dumpDirectory)) {
         std::filesystem::create_directories(dumpDirectory);
     }
 
-    Dump(steamclientlib, dumpDirectory, true); // Used to be main() of steamworks_dumper
+    /* Dumps Protobufs and function information from steamclient.so using steamworks_dumper */
+    Dump(steamclientlib, dumpDirectory, true); // Dump actual function information
     ProtobufDumper::ProtobufDumper::DumpProtobufs({std::filesystem::path(steamclientlib)}, dumpDirectory + "/protobufs/"); // Dumps protobufs
 
     ClassMap clientUser(dumpDirectory + '/' + "IClientUserMap.json");
