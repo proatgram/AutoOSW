@@ -4,7 +4,7 @@
 
 #include "nlohmann/json.hpp"
 
-ClassMap::JsonFunction::JsonFunction(const std::string &name, std::size_t argc, int interfaceId, long int functionId, long int fencepost, bool cannotCallInCrossProcess, int32_t address, std::string serializedReturn, const std::vector<std::string> &serializedArgs) :
+ClassMap::JsonFunction::JsonFunction(const std::string &name, std::size_t argc, int interfaceId, long int functionId, long int fencepost, bool cannotCallInCrossProcess, int32_t address, const std::vector<std::string> &serializedReturns, const std::vector<std::string> &serializedArgs) :
     name(name),
     argc(argc),
     interfaceId(interfaceId),
@@ -12,7 +12,7 @@ ClassMap::JsonFunction::JsonFunction(const std::string &name, std::size_t argc, 
     fencepost(fencepost),
     cannotCallInCrossProcess(cannotCallInCrossProcess),
     address(address),
-    serializedReturn(serializedReturn),
+    serializedReturns(serializedReturns),
     serializedArgs(serializedArgs)
 {
 
@@ -36,9 +36,13 @@ ClassMap::ClassMap(const std::filesystem::path jsonPath) :
         auto args = function.at("serializedargs");
         auto returns = function.at("serializedreturns");
         std::vector<std::string> typeArgs;
+        std::vector<std::string> typeReturns;
 
-        for (std::string argType : args) {
+        for (const std::string &argType : args) {
             typeArgs.push_back(argType);
+        }
+        for (const std::string &returnType : returns) {
+            typeReturns.push_back(returnType);
         }
         
         m_functions.emplace_back(
@@ -49,7 +53,7 @@ ClassMap::ClassMap(const std::filesystem::path jsonPath) :
             std::stol(function.at("fencepost").get<std::string>()),
             (function.at("cannotcallincrossprocess").get<std::string>() == "0" ? false : true),
             std::stoi(function.at("addr").get<std::string>()),
-            (returns.empty() ? "void" : returns.at(0).get<std::string>()),
+            typeReturns,
             typeArgs
         );
     }

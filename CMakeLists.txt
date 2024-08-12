@@ -51,7 +51,6 @@ add_executable(AutoOSW
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/ClassMap.hpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/CallbackMap.cpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/CallbackMap.hpp>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src/HeaderManager.cpp>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/HeaderManager.hpp>
 )
 

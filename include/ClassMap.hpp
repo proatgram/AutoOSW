@@ -14,7 +14,7 @@ class ClassMap {
          *
          */
         struct JsonFunction {
-            JsonFunction(const std::string &name, std::size_t argc, int interfaceId, long int functionId, long int fencepost, bool cannotCallInCrossProcess, int32_t address, std::string serializedReturn, const std::vector<std::string> &serializedArgs);
+            JsonFunction(const std::string &name, std::size_t argc, int interfaceId, long int functionId, long int fencepost, bool cannotCallInCrossProcess, int32_t address, const std::vector<std::string> &serializedReturns, const std::vector<std::string> &serializedArgs);
 
             std::string name;
             // argc is unreliable in steamworks_dumper it seems
@@ -29,7 +29,7 @@ class ClassMap {
 
             int32_t address;
 
-            std::string serializedReturn;
+            std::vector<std::string> serializedReturns;
             std::vector<std::string> serializedArgs;
         };
 
