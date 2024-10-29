@@ -29,7 +29,7 @@ ClassMap::ClassMap(const std::filesystem::path jsonPath) :
     nlohmann::json json = nlohmann::json::parse(file);
 
     m_jsonClassName = json.at("name").get<std::string>();
-    m_jsonClassName.resize(m_jsonClassName.find_last_of("Map"));
+    m_jsonClassName.resize(m_jsonClassName.find("Map"));
     m_foundAt = std::stoi(json.at("found_at").get<std::string>());
     
     for (auto function : json.at("functions")) {

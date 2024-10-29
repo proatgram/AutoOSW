@@ -30,7 +30,7 @@ fetchcontent_declare(
 fetchcontent_declare(
     steamworks_dumper
     GIT_REPOSITORY "https://github.com/proatgram/steamworks_dumper.git"
-    GIT_TAG "e4c2f1e3fe0eae02688cdd51922688091cd2e366"
+    GIT_TAG "f317b5b27f5ec3bab5db249cf5098edae0ef1830"
 )
 
 fetchcontent_makeavailable(ValveFileVDF argparse nlohmann_json steamworks_dumper)

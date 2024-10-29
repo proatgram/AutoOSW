@@ -46,6 +46,12 @@ class ClassMap {
         ClassMap(std::filesystem::path jsonPath);
 
         /**
+         * @brief Default constructs a new `ClassMap` instance
+         *
+         */
+        ClassMap() = default;
+
+        /**
          * @brief Gets the functions in the class
          *
          * @return std::vector<JsonFunction> A `std::vector` of functions encapsulates as a `JsonFunction`
