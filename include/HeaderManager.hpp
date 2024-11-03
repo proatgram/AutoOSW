@@ -13,6 +13,7 @@
 #include <iostream>
 
 #include "ClassMap.hpp"
+#include "EMsgMap.hpp"
 
 class HeaderManagerBase {
     public:
@@ -148,7 +149,7 @@ R"(            /*****************************  Open SteamWorks  ****************
 template <typename T>
 class HeaderManager final : public HeaderManagerBase {
     public:
-        HeaderManager(const std::filesystem::path &jsonMapPath, const std::optional<std::filesystem::path> &oldHeader = std::nullopt) = delete;
+        HeaderManager(const std::filesystem::path &jsonDumpPath, const std::filesystem::path &newHeaderPath, std::optional<std::filesystem::path> oldJsonMapDump = std::nullopt, const std::optional<std::filesystem::path> &oldHeader = std::nullopt) = delete;
 };
 
 template <>
@@ -394,7 +395,6 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
         }
 
         inline void GenerateContent() final {
-            std::cout << "Name: " << m_classMap.GetClassName() << std::endl;
             m_generatedHeader << "osw_abstract_class " << m_classMap.GetClassName() << " {" << std::endl;
             for (const auto &[jsonFunction, functionPair] : *m_foundTypes) {
                 m_generatedHeader << "\t" << functionPair.second << "\n\n";
@@ -458,4 +458,32 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
         };
 
         std::optional<std::map<std::optional<ClassMap::JsonFunction>, std::pair<std::vector<HeaderFunction>, std::string>, OptionalComparator>> m_foundTypes;
+};
+
+template<>
+class HeaderManager<EMsgMap> final : public HeaderManagerBase {
+    public:
+        HeaderManager(const std::filesystem::path &jsonDumpPath, const std::filesystem::path &newHeaderPath, std::optional<std::filesystem::path> ) :
+            HeaderManagerBase(jsonDumpPath, newHeaderPath, std::nullopt, std::nullopt),
+                m_eMsgMap(jsonDumpPath) {}
+
+    private:
+        // Not used for EMsg (Porque nós não temos um antigo)
+        void AnalyzeOldHeader() override {}
+
+        void GenerateContent() override {
+            for (const auto &[name, eMsg, flags, serverType] : m_eMsgMap.GetEMsgs()) {
+                m_eMsgs.insert_or_assign(eMsg, name);
+            }
+
+            m_generatedHeader << "enum class EMessages {\n";
+            for (const auto &[eMsg, name] : m_eMsgs) {
+                m_generatedHeader << "    " << name << " = " << eMsg << ",\n";
+            }
+            m_generatedHeader << "};";
+        }
+
+        std::map<int, std::string> m_eMsgs;
+
+        EMsgMap m_eMsgMap;
 };

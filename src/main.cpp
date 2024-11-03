@@ -75,7 +75,8 @@ int main(int argc, char **argv) {
 
     /* Handle generating header file information */
     // TODO: If a map dump and a header have a nape mismatch (but still have the same functions) DEAL WITH IT (somehow)
-    std::filesystem::path headerPath("/home/thetimbrick/Projects/steamd/build/_deps/opensteamworks-src/OpenSteamworks/Interfaces/Client/");
+    
+    // Generates the Client Interface headers
     for (const std::filesystem::path &currentNewDumpFile : std::filesystem::directory_iterator(dumpDirectory)) {
         if (!currentNewDumpFile.has_filename() || currentNewDumpFile.filename().string().substr(0, 7) != "IClient") {
             continue;
@@ -99,7 +100,10 @@ int main(int argc, char **argv) {
             }
         }
 
-        HeaderManager<ClassMap> header(currentNewDumpFile, generatedDirectory + "/" + currentNewDumpFile.filename().string().substr(0, currentNewDumpFile.filename().string().find("Map.json")).append(".").append(headerFormat), matchedOldDump, matchedOldHeader);
+        HeaderManager<ClassMap> header(currentNewDumpFile, generatedDirectory + "/IClient/" + currentNewDumpFile.filename().string().substr(0, currentNewDumpFile.filename().string().find("Map.json")).append(".").append(headerFormat), matchedOldDump, matchedOldHeader);
         header.GenerateHeader();
     }
+
+    HeaderManager<EMsgMap> header(std::filesystem::path(dumpDirectory).append("emsg_list.json"), std::filesystem::path(generatedDirectory).append("EMsg").append("EMsgs.hpp"), std::nullopt);
+    header.GenerateHeader();
 }
