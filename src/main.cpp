@@ -3,7 +3,7 @@
 #include "ManifestManager.hpp"
 #include "HeaderManager.hpp"
 #include "ClassMap.hpp"
-#include "CallbackMap.hpp"
+#include "CallbackMap.hpp" // Callbacks seem really hit or miss for steamworks_dumper, not sure how I'd properly dump and update them
 
 #include "ProtobufDumper/ProtobufDumper.h"
 
@@ -31,6 +31,9 @@ int main(int argc, char **argv) {
     arguments.add_argument("--generated") // The directory to write generated files to
         .help("The directory to write generated files to")
         .default_value("./generated");
+    arguments.add_argument("--protobufs-in-generated")
+        .help("Puts the dumped Protobuf files in the generation directory")
+        .flag();
 
     try {
         arguments.parse_args(argc, argv);
@@ -71,7 +74,7 @@ int main(int argc, char **argv) {
 
     /* Dumps Protobufs and function information from steamclient.so using steamworks_dumper and ProtobufDumper */
     Dump(steamclientlib, dumpDirectory, true); // Dump actual function information
-    ProtobufDumper::ProtobufDumper::DumpProtobufs({std::filesystem::path(steamclientlib)}, dumpDirectory + "/protobufs/"); // Dumps protobufs
+    ProtobufDumper::ProtobufDumper::DumpProtobufs({std::filesystem::path(steamclientlib)}, (arguments.get<bool>("--protobufs-in-generated") ? generatedDirectory : dumpDirectory) + "/Protobuf/"); // Dumps protobufs
 
     /* Handle generating header file information */
     // TODO: If a map dump and a header have a nape mismatch (but still have the same functions) DEAL WITH IT (somehow)
@@ -104,6 +107,6 @@ int main(int argc, char **argv) {
         header.GenerateHeader();
     }
 
-    HeaderManager<EMsgMap> header(std::filesystem::path(dumpDirectory).append("emsg_list.json"), std::filesystem::path(generatedDirectory).append("EMsg").append("EMsgs.hpp"), std::nullopt);
+    HeaderManager<EMsgMap> header(std::filesystem::path(dumpDirectory).append("emsg_list.json"), std::filesystem::path(generatedDirectory).append("EMsg").append(std::string("EMsgs.").append(headerFormat)), std::nullopt);
     header.GenerateHeader();
 }
