@@ -70,6 +70,7 @@ class HeaderManagerBase {
 
     protected:
         inline static const std::regex FUNCTION_REGEX = std::regex(R"rgx((?:^\s*)(virtual\s+)?((?:const|volatile)?\s*[\w:\<\>\[\]&\*]+)\s+([\w]+)\s*\(([^)]*)\)\s*(const)?\s*(?:->\s*((?:const|volatile)?\s*[\w:\<\>\[\]&\*]+))?\s*(=\s*0)?;?)rgx");
+        inline static const std::regex PARAM_REGEX = std::regex(R"rgx((const\s+)?((?:[\w:\[\]]+)(?:<[^>]+>)?)(\s+const)?\s*(\*|\&)?\s*([\w\[\]]+)?\s*(?=,|$))rgx");
 
         virtual void AnalyzeOldHeader() = 0;
 
@@ -83,17 +84,16 @@ class HeaderManagerBase {
             std::vector<std::string> parameterNames;
             std::smatch match;
 
-            static const std::regex PARAM_REGEX(R"rgx((const\s+)?((?:[\w:\[\]]+)(?:<[^>]+>)?)\s*(\*|\&)?\s*([\w\[\]]+)?\s*(?=,|$))rgx");
             auto paramsBegin = std::sregex_iterator(line.begin(), line.end(), PARAM_REGEX);
             auto paramsEnd = std::sregex_iterator();
 
             for (std::sregex_iterator i = paramsBegin; i != paramsEnd; ++i) {
                 std::smatch paramMatch = *i;
                 std::string param;
-                param += (paramMatch[1].matched ? "const " : "");
+                param += (paramMatch[1].matched || paramMatch[3].matched ? "const " : "");
                 param += paramMatch[2].str();
-                param += (paramMatch[3].matched ? " " + paramMatch[3].str() : "");
-                param += (paramMatch[4].matched ? (paramMatch[3].matched ? paramMatch[4].str() : " " + paramMatch[4].str()) : "");
+                param += (paramMatch[4].matched ? " " + paramMatch[4].str() : "");
+                param += (paramMatch[5].matched ? (paramMatch[4].matched ? paramMatch[5].str() : " " + paramMatch[5].str()) : "");
                 parameterNames.push_back(param);
             }
 
@@ -369,11 +369,11 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                                 // Would compare both argc, but dumped JSON file argc seemed to be inaccurate? Por que?? é estúpido
                                 // TODO: BIG TODO: Get a copy of a newer dump and headers, and incorperate checks
                                 // with dumps from steamworks_dumper to check serialization changes
-                                m_foundTypes->emplace(newClassMapFunction, std::make_pair(std::vector<HeaderFunction>{headerFunction}, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction)));
+                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction)}});
                             }
                             else {
                                 // Function size (argc) doesn't match and has changed
-                                m_foundTypes->emplace(newClassMapFunction, std::make_pair(std::vector<HeaderFunction>{headerFunction}, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction, true)));
+                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction, true)}});
                             }
 
                         }
@@ -381,13 +381,107 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                             // Means that the function is overloaded.
                             // Determine which overloaded definition we are looking at.
                             // (How so? Good question :3)
-                            std::cerr << "Found overloaded function. No implementation to handle overloaded functions." << std::endl;
+
+                            std::list<ClassMap::JsonFunction> jsonFunctionList = std::any_cast<std::list<ClassMap::JsonFunction>>(classMapFound);
+
+                            std::optional<ClassMap::JsonFunction> matchedJsonFunction{std::nullopt};
+                            for (const ClassMap::JsonFunction &jsonFunction : jsonFunctionList) {
+                                // First try to determine overloads by serialized return types, etc
+
+                                int jsonSerializedReturns = jsonFunction.serializedReturns.size();
+                                int jsonSerializedArgs = jsonFunction.serializedArgs.size();
+                                
+                                // Determine header "serialized returns"
+                                int headerSerializedReturns{1};
+                                int headerSerializedArgs{};
+                                for (const std::string &argument : headerFunction.arguments) {
+                                    std::smatch match;
+                                    if (!std::regex_search(argument, match, PARAM_REGEX)) {
+                                        std::cerr << "Param regex did not match in overloaded function handler... :(" << std::endl;
+                                    }
+
+                                    if (match[4].matched && !(match[1].matched || match[3].matched)) {
+                                        headerSerializedReturns++;
+                                    }
+                                    else {
+                                        headerSerializedArgs++;
+                                    }
+                                }
+
+                                if (jsonSerializedReturns != headerSerializedReturns || jsonSerializedArgs != headerSerializedArgs) {
+                                    std::cerr << "Found overloaded function, attempt to match to a JSON function failed..." << std::endl;
+                                    std::cerr << "JSON serialized argument count: " << jsonSerializedArgs << std::endl;
+                                    std::cerr << "Header serialized argument count: " << headerSerializedArgs << std::endl;
+                                    std::cerr << "JSON serialized returns count: " << jsonSerializedReturns << std::endl;
+                                    std::cerr << "Header serialized returns count: " << headerSerializedReturns << std::endl;
+                                    continue;
+                                }
+
+                                std::cout << "Matched overloaded function to header:" << "\n\t";
+                                std::cout << curLine << "\n\t";
+                                std::cout << "Serialized Arguments:" << [jsonFunction]() -> std::string {
+                                    std::string ret;
+                                    ret += "[";
+                                    for (int i = 0; i < jsonFunction.serializedArgs.size(); i++) {
+                                        ret += jsonFunction.serializedArgs.at(i);
+                                        if (i + 1 < jsonFunction.serializedArgs.size()) {
+                                            ret += ", ";
+                                        }
+                                    }
+
+                                    ret += "]";
+
+                                    return ret;
+                                }() << "\n\t";
+
+                                std::cout << "Serialized returns:" << [jsonFunction]() -> std::string {
+                                    std::string ret;
+                                    ret += "[";
+                                    for (int i = 0; i < jsonFunction.serializedReturns.size(); i++) {
+                                        ret += jsonFunction.serializedReturns.at(i);
+                                        if (i + 1 < jsonFunction.serializedReturns.size()) {
+                                            ret += ", ";
+                                        }
+                                    }
+                                    
+                                    ret += "]";
+
+                                    return ret;
+                                }() << std::endl;
+                                matchedJsonFunction = jsonFunction;
+                                break;
+                            }
+
+                            if (!matchedJsonFunction.has_value()) {
+                                std::cerr << "Unabled to find a match for the function." << std::endl;
+                            }
+
+                            auto it = m_foundTypes->find(matchedJsonFunction);
+
+                            std::string stringFunc = GenerateStringFunction(headerFunction, matchedJsonFunction, oldClassMapFunction, (matchedJsonFunction.has_value() ? false : true));
+
+                            if (it == m_foundTypes->end()) {
+                                m_foundTypes->emplace(matchedJsonFunction, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, stringFunc}});
+                            }
+                            else {
+                                bool found{false};
+                                for (const auto &[headerFunc, headerString] : it->second) {
+                                    // Determine if overload is already in the overload vector
+                                    if (headerString == stringFunc) {
+                                        std::cerr << "Overloaded function is already in the overload vector..." << std::endl;
+                                        found = true;
+                                    }
+                                }
+                                if (!found) {
+                                    it->second.push_back({headerFunction, stringFunc});
+                                }
+                            }
                         }
                         else {
                             // Unknown function in the class map.
                             // Give warning. (Boo)
                             std::cerr << "Found unknown function " << headerFunction.name << " in file " << m_oldHeaderPath->string() << std::endl;
-                            m_foundTypes->emplace(std::nullopt, std::make_pair(std::vector<HeaderFunction>{headerFunction}, GenerateStringFunction(headerFunction, std::nullopt)));
+                            m_foundTypes->emplace(std::nullopt, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, std::nullopt, oldClassMapFunction)}});
                         }
                     }
                 }
@@ -396,8 +490,10 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
 
         inline void GenerateContent() final {
             m_generatedHeader << "osw_abstract_class " << m_classMap.GetClassName() << " {" << std::endl;
-            for (const auto &[jsonFunction, functionPair] : *m_foundTypes) {
-                m_generatedHeader << "\t" << functionPair.second << "\n\n";
+            for (const auto &[jsonFunction, functionPairVector] : *m_foundTypes) {
+                for (const auto &[oldHeaderFunction, stringFunction] : functionPairVector) {
+                    m_generatedHeader << "\t" << stringFunction << "\n\n";
+                }
             }
 
             m_generatedHeader << "\n};" << std::endl;
@@ -457,7 +553,8 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
             }
         };
 
-        std::optional<std::map<std::optional<ClassMap::JsonFunction>, std::pair<std::vector<HeaderFunction>, std::string>, OptionalComparator>> m_foundTypes;
+
+        std::optional<std::map<std::optional<ClassMap::JsonFunction>, std::vector<std::pair<HeaderFunction, std::string>>, OptionalComparator>> m_foundTypes;
 };
 
 template<>
@@ -469,6 +566,7 @@ class HeaderManager<EMsgMap> final : public HeaderManagerBase {
 
     private:
         // Not used for EMsg (Porque nós não temos um antigo)
+        // At least, not yet
         void AnalyzeOldHeader() override {}
 
         void GenerateContent() override {

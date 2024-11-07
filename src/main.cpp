@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        HeaderManager<ClassMap> header(currentNewDumpFile, generatedDirectory + "/IClient/" + currentNewDumpFile.filename().string().substr(0, currentNewDumpFile.filename().string().find("Map.json")).append(".").append(headerFormat), matchedOldDump, matchedOldHeader);
+        HeaderManager<ClassMap> header(currentNewDumpFile, generatedDirectory + "/Interfaces/Client/" + currentNewDumpFile.filename().string().substr(0, currentNewDumpFile.filename().string().find("Map.json")).append(".").append(headerFormat), matchedOldDump, matchedOldHeader);
         header.GenerateHeader();
     }
 
