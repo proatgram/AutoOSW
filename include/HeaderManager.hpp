@@ -489,7 +489,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
         }
 
         inline void GenerateContent() final {
-            m_generatedHeader << "osw_abstract_class " << m_classMap.GetClassName() << " {" << std::endl;
+            m_generatedHeader << "osw_abstract_class OSW_UNSAFE_INTERFACE" << m_classMap.GetClassName() << " {" << std::endl;
             for (const auto &[jsonFunction, functionPairVector] : *m_foundTypes) {
                 for (const auto &[oldHeaderFunction, stringFunction] : functionPairVector) {
                     m_generatedHeader << "\t" << stringFunction << "\n\n";
