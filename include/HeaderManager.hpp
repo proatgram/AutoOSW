@@ -11,6 +11,7 @@
 #include <fstream>
 #include <regex>
 #include <iostream>
+#include <variant>
 
 #include "ClassMap.hpp"
 #include "EMsgMap.hpp"
@@ -32,6 +33,10 @@ class HeaderManagerBase {
             if (m_oldHeaderPath.has_value()) {
                 std::cout << "Analysing old header: " << m_oldHeaderPath->string() << std::endl;
                 AnalyzeOldHeader();
+            }
+            else {
+                std::cout << "No old header given for: " << m_jsonDumpPath.string() << std::endl;
+                AnalyzeContentNoHeader();
             }
 
             m_generatedHeader << GENERATED_NOTICE_MSG << "\n" << std::endl;
@@ -73,6 +78,8 @@ class HeaderManagerBase {
         inline static const std::regex PARAM_REGEX = std::regex(R"rgx((const\s+)?((?:[\w:\[\]]+)(?:<[^>]+>)?)(\s+const)?\s*(\*|\&)?\s*([\w\[\]]+)?\s*(?=,|$))rgx");
 
         virtual void AnalyzeOldHeader() = 0;
+
+        virtual void AnalyzeContentNoHeader() = 0;
 
         virtual void GenerateContent() = 0;
 
@@ -221,7 +228,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
             return function;
         } 
 
-        inline const std::string GenerateStringFunction(const HeaderFunction &function, const std::optional<ClassMap::JsonFunction> &jsonFunction, const std::optional<ClassMap::JsonFunction> &oldJsonFunction = std::nullopt, bool argcMismatch = false) {
+        inline const std::string GenerateStringFunction(std::optional<HeaderFunction> function, const std::optional<ClassMap::JsonFunction> &jsonFunction, const std::optional<ClassMap::JsonFunction> &oldJsonFunction = std::nullopt, bool argcMismatch = false) {
             std::stringstream ss;
 
             ss << "/*\n\t";
@@ -307,24 +314,35 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                 ss << "OSW_UNSAFE_WARNING\n\t";
             }
 
-            ss << (function.virtualFunction ? "virtual " : "")
-               << "auto "
-               << function.name
-               << "(" << [args = function.arguments]() -> std::string {
-                   std::string output;
+            if (function.has_value()) {
+                ss << (function->virtualFunction ? "virtual " : "")
+                   << "auto "
+                   << function->name
+                   << "(" << [args = function->arguments]() -> std::string {
+                       std::string output;
 
-                   for (int i = 0; i < args.size(); i++) {
-                       output += args.at(i);
-                       if (i + 1 < args.size()) {
-                           output += ", ";
+                       for (int i = 0; i < args.size(); i++) {
+                           output += args.at(i);
+                           if (i + 1 < args.size()) {
+                               output += ", ";
+                           }
                        }
-                   }
 
-                   return output;
-               }()
-               << ")" << (function.constFunction ? " const " : " ")
-               << "-> " << function.indefiniteReturn
-               << (function.pureVirtualFunction ? " = 0;" : ";");
+                       return output;
+                   }()
+                   << ")" << (function->constFunction ? " const " : " ")
+                   << "-> " << function->indefiniteReturn
+                   << (function->pureVirtualFunction ? " = 0;" : ";");
+            }
+            else if (jsonFunction.has_value()) {
+                ss << "virtual auto "               // Most probably a virtual function if it's in a class map, never seen different
+                   << jsonFunction->name
+                   << "(osw_unknown_arguments) -> osw_unknown_return = 0;";
+            }
+            else {
+                std::cerr << "GenerateStringFunction called without a header function or a json dump function." << std::endl;
+                return {};
+            }
             
             return ss.str();
         }
@@ -369,11 +387,11 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                                 // Would compare both argc, but dumped JSON file argc seemed to be inaccurate? Por que?? é estúpido
                                 // TODO: BIG TODO: Get a copy of a newer dump and headers, and incorperate checks
                                 // with dumps from steamworks_dumper to check serialization changes
-                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction)}});
+                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction)}});
                             }
                             else {
                                 // Function size (argc) doesn't match and has changed
-                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction, true)}});
+                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction, true)}});
                             }
 
                         }
@@ -384,7 +402,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
 
                             std::list<ClassMap::JsonFunction> jsonFunctionList = std::any_cast<std::list<ClassMap::JsonFunction>>(classMapFound);
 
-                            std::optional<ClassMap::JsonFunction> matchedJsonFunction{std::nullopt};
+                            std::optional<ClassMap::JsonFunction> matchedJsonFunction;
                             for (const ClassMap::JsonFunction &jsonFunction : jsonFunctionList) {
                                 // First try to determine overloads by serialized return types, etc
 
@@ -419,7 +437,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
 
                                 std::cout << "Matched overloaded function to header:" << "\n\t";
                                 std::cout << curLine << "\n\t";
-                                std::cout << "Serialized Arguments:" << [jsonFunction]() -> std::string {
+                                std::cout << "Serialized Arguments: " << [jsonFunction]() -> std::string {
                                     std::string ret;
                                     ret += "[";
                                     for (int i = 0; i < jsonFunction.serializedArgs.size(); i++) {
@@ -434,7 +452,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                                     return ret;
                                 }() << "\n\t";
 
-                                std::cout << "Serialized returns:" << [jsonFunction]() -> std::string {
+                                std::cout << "Serialized Returns: " << [jsonFunction]() -> std::string {
                                     std::string ret;
                                     ret += "[";
                                     for (int i = 0; i < jsonFunction.serializedReturns.size(); i++) {
@@ -461,7 +479,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                             std::string stringFunc = GenerateStringFunction(headerFunction, matchedJsonFunction, oldClassMapFunction, (matchedJsonFunction.has_value() ? false : true));
 
                             if (it == m_foundTypes->end()) {
-                                m_foundTypes->emplace(matchedJsonFunction, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, stringFunc}});
+                                m_foundTypes->emplace(matchedJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, stringFunc}});
                             }
                             else {
                                 bool found{false};
@@ -481,15 +499,171 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                             // Unknown function in the class map.
                             // Give warning. (Boo)
                             std::cerr << "Found unknown function " << headerFunction.name << " in file " << m_oldHeaderPath->string() << std::endl;
-                            m_foundTypes->emplace(std::nullopt, std::vector<std::pair<HeaderFunction, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, std::nullopt, oldClassMapFunction)}});
+                            m_foundTypes->emplace(std::nullopt, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, std::nullopt, oldClassMapFunction)}});
                         }
                     }
                 }
             }
         }
 
+        inline void AnalyzeContentNoHeader() override {
+            // When analyzing with no header, we can use an old JSON dump instead
+            // of a header to compare changes, if there is one present.
+            std::optional<ClassMap> oldJsonMapDump;
+            if (m_oldJsonMapDumpPath.has_value()) {
+                oldJsonMapDump.emplace(*m_oldJsonMapDumpPath);
+            }
+
+
+            for (const auto &jsonFunction : m_classMap.GetFunctions()) {
+                std::any oldClassMapFound = IsFunctionInClassMap(jsonFunction, oldJsonMapDump.value_or(ClassMap{}));
+                std::any currentClassMapFound = IsFunctionInClassMap(jsonFunction, m_classMap); // Soley used for determining if we have an overload
+
+                std::string stringFunction;
+
+                if (currentClassMapFound.type() == typeid(std::list<ClassMap::JsonFunction>)) {
+                    if (oldClassMapFound.type() == typeid(std::list<ClassMap::JsonFunction>)) {
+                        // Handle overload checking?
+                        // I'm not sure if this portion works at all
+                        // since I have not tested with another map
+                        std::optional<ClassMap::JsonFunction> matchedJsonFunction;
+                        for (const ClassMap::JsonFunction &oldJsonFunction : std::any_cast<std::list<ClassMap::JsonFunction>>(oldClassMapFound)) {
+                            if (jsonFunction.serializedReturns.size() != oldJsonFunction.serializedReturns.size() || jsonFunction.serializedReturns.size() != oldJsonFunction.serializedReturns.size()) {
+                                std::cerr << "Found overloaded function, attempt to match to a JSON function failed..." << std::endl;
+                                std::cerr << "New JSON serialized argument count: " << jsonFunction.serializedArgs.size() << std::endl;
+                                std::cerr << "Old JSON serialized argument count: " << oldJsonFunction.serializedArgs.size() << std::endl;
+                                std::cerr << "New JSON serialized returns count: " << jsonFunction.serializedReturns.size() << std::endl;
+                                std::cerr << "Old JSON serialized returns count: " << oldJsonFunction.serializedReturns.size() << std::endl;
+                                continue;
+                            }
+
+                            std::cout << "Matched overloaded function to old JSON:" << "\n\t";
+                            std::cout << "Serialized Arguments: " << [jsonFunction]() -> std::string {
+                                std::string ret;
+                                ret += "[";
+                                for (int i = 0; i < jsonFunction.serializedArgs.size(); i++) {
+                                    ret += jsonFunction.serializedArgs.at(i);
+                                    if (i + 1 < jsonFunction.serializedArgs.size()) {
+                                        ret += ", ";
+                                    }
+                                }
+
+                                ret += "]";
+
+                                return ret;
+                            }() << "\n\t";
+
+                            std::cout << "Serialized Returns: " << [jsonFunction]() -> std::string {
+                                std::string ret;
+                                ret += "[";
+                                for (int i = 0; i < jsonFunction.serializedReturns.size(); i++) {
+                                    ret += jsonFunction.serializedReturns.at(i);
+                                    if (i + 1 < jsonFunction.serializedReturns.size()) {
+                                        ret += ", ";
+                                    }
+                                }
+                                
+                                ret += "]";
+
+                                return ret;
+                            }() << std::endl;
+                            matchedJsonFunction = jsonFunction;
+                            break;
+                        }
+
+                        if (!matchedJsonFunction.has_value()) {
+                            std::cerr << "Unabled to find a match for the function using old JSON dumps." << std::endl;
+                        }
+
+                        stringFunction = GenerateStringFunction(std::nullopt, jsonFunction, matchedJsonFunction, true);
+
+                        auto found = m_foundTypes->find(jsonFunction);
+
+                        if (found == m_foundTypes->cend()) {
+                            m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{jsonFunction, stringFunction}});
+                        }
+                        else {
+                            std::size_t sameArgCountInFound = std::count_if(found->second.cbegin(), found->second.cend(), [jsonFunction](const auto &element) -> bool {
+                                if (jsonFunction.serializedArgs.size() == std::get<ClassMap::JsonFunction>(element.first.value()).serializedArgs.size() && jsonFunction.serializedReturns.size() == std::get<ClassMap::JsonFunction>(element.first.value()).serializedReturns.size()) {
+                                    return true;
+                                }
+
+                                return false;
+                            });
+
+                            std::list<ClassMap::JsonFunction> jsonList = std::any_cast<std::list<ClassMap::JsonFunction>>(currentClassMapFound);
+
+                            std::size_t sameArgCountInDetected = std::count_if(jsonList.cbegin(), jsonList.cend(), [jsonFunction](const ClassMap::JsonFunction &element) -> bool {
+                                if (jsonFunction.serializedArgs.size() == element.serializedArgs.size() && jsonFunction.serializedReturns.size() == element.serializedReturns.size()) {
+                                    return true;
+                                }
+
+                                return false;
+                            });
+
+                            if (sameArgCountInFound == sameArgCountInDetected) {
+                                std::cerr << "Overloaded function is already in the overload vector..." << std::endl;
+                                continue;
+                            }
+                            else {
+                                found->second.emplace_back(jsonFunction, stringFunction);
+                            }
+                        }
+
+                    }
+                    else {
+                        // Not sure if this workssss
+                        stringFunction = GenerateStringFunction(std::nullopt, jsonFunction, std::nullopt, true);
+                        auto found = m_foundTypes->find(jsonFunction);
+                        if (found == m_foundTypes->cend()) {
+                            m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{jsonFunction, stringFunction}});
+                        }
+                        else {
+                            std::size_t sameArgCountInFound = std::count_if(found->second.cbegin(), found->second.cend(), [jsonFunction](const auto &element) -> bool {
+                                if (jsonFunction.serializedArgs.size() == std::get<ClassMap::JsonFunction>(element.first.value()).serializedArgs.size() && jsonFunction.serializedReturns.size() == std::get<ClassMap::JsonFunction>(element.first.value()).serializedReturns.size()) {
+                                    return true;
+                                }
+
+                                return false;
+                            });
+
+                            std::list<ClassMap::JsonFunction> jsonList = std::any_cast<std::list<ClassMap::JsonFunction>>(currentClassMapFound);
+
+                            std::size_t sameArgCountInDetected = std::count_if(jsonList.cbegin(), jsonList.cend(), [jsonFunction](const ClassMap::JsonFunction &element) -> bool {
+                                std::cout << jsonFunction.name << std::endl;
+                                if (jsonFunction.serializedArgs.size() == element.serializedArgs.size() && jsonFunction.serializedReturns.size() == element.serializedReturns.size()) {
+                                    return true;
+                                }
+
+                                return false;
+                            });
+
+                            if (sameArgCountInFound == sameArgCountInDetected) {
+                                std::cerr << "Overloaded function is already in the overload vector..." << std::endl;
+                                continue;
+                            }
+                            else {
+                                found->second.emplace_back(jsonFunction, stringFunction);
+                            }
+                        }
+                    }
+                }
+                else {
+                    if (oldClassMapFound.type() == typeid(ClassMap::JsonFunction)) {
+                        // I think it's a guarentee that if the current class map isn't overloaded, the previous isn't too
+                        stringFunction = GenerateStringFunction(std::nullopt, jsonFunction, std::any_cast<ClassMap::JsonFunction>(oldClassMapFound), true);
+                    }
+                    else {
+                        stringFunction = GenerateStringFunction(std::nullopt, jsonFunction, std::nullopt, true);
+                    }
+                }
+                
+                m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{jsonFunction, stringFunction}});
+            }
+        }
+
         inline void GenerateContent() final {
-            m_generatedHeader << "osw_abstract_class OSW_UNSAFE_INTERFACE" << m_classMap.GetClassName() << " {" << std::endl;
+            m_generatedHeader << "osw_abstract_class OSW_UNSAFE_INTERFACE " << m_classMap.GetClassName() << " {" << std::endl;
             for (const auto &[jsonFunction, functionPairVector] : *m_foundTypes) {
                 for (const auto &[oldHeaderFunction, stringFunction] : functionPairVector) {
                     m_generatedHeader << "\t" << stringFunction << "\n\n";
@@ -537,6 +711,25 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
             }
         }
 
+        inline std::any IsFunctionInClassMap(const ClassMap::JsonFunction &jsonFunction, const ClassMap &classMap) const {
+            std::list<ClassMap::JsonFunction> occ;
+            for (const ClassMap::JsonFunction &jsonFunctionCur : classMap.GetFunctions()) {
+                if (jsonFunction.name == jsonFunctionCur.name) {
+                    occ.push_back(jsonFunction);
+                }
+            }
+
+            if (occ.size() == 1) {
+                return *occ.begin();
+            }
+            else if (occ.size() > 1) {
+                return occ;
+            }
+            else {
+                return {};
+            }
+        }
+
         ClassMap m_classMap;
 
         // Custom comparator for std::map
@@ -554,7 +747,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
         };
 
 
-        std::optional<std::map<std::optional<ClassMap::JsonFunction>, std::vector<std::pair<HeaderFunction, std::string>>, OptionalComparator>> m_foundTypes;
+        std::optional<std::map<std::optional<ClassMap::JsonFunction>, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>, OptionalComparator>> m_foundTypes;
 };
 
 template<>
@@ -569,11 +762,14 @@ class HeaderManager<EMsgMap> final : public HeaderManagerBase {
         // At least, not yet
         void AnalyzeOldHeader() override {}
 
-        void GenerateContent() override {
+        void AnalyzeContentNoHeader() override {
             for (const auto &[name, eMsg, flags, serverType] : m_eMsgMap.GetEMsgs()) {
                 m_eMsgs.insert_or_assign(eMsg, name);
             }
 
+        }
+
+        void GenerateContent() override {
             m_generatedHeader << "enum class EMessages {\n";
             for (const auto &[eMsg, name] : m_eMsgs) {
                 m_generatedHeader << "    " << name << " = " << eMsg << ",\n";
