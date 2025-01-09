@@ -83,10 +83,6 @@ class HeaderManagerBase {
 
         virtual void GenerateContent() = 0;
 
-        inline static bool IsFunctionDecleration(const std::string &line) {
-            return std::regex_match(line, FUNCTION_REGEX);
-        }
-
         static inline std::vector<std::string> GetParameters(const std::string &line) {
             std::vector<std::string> parameterNames;
             std::smatch match;
@@ -195,6 +191,15 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
 
         /* Functions */
 
+        inline static bool IsFunctionDecleration(const std::string &line) {
+            return std::regex_match(line, FUNCTION_REGEX);
+        }
+
+        inline static bool IsStructReturnDefine(const std::string &line) {
+            return (line.find("STEAMWORKS_STRUCT_RETURN") != std::string::npos);
+        }
+
+
         static inline HeaderFunction GenerateHeaderFunction(const std::string &line) {
             std::smatch match;
             std::regex_match(line.cbegin(), line.cend(), match, FUNCTION_REGEX);
@@ -228,7 +233,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
             return function;
         } 
 
-        inline const std::string GenerateStringFunction(std::optional<HeaderFunction> function, const std::optional<ClassMap::JsonFunction> &jsonFunction, const std::optional<ClassMap::JsonFunction> &oldJsonFunction = std::nullopt, bool argcMismatch = false) {
+        inline const std::string GenerateStringFunction(std::optional<std::variant<HeaderFunction, std::string>> function, const std::optional<ClassMap::JsonFunction> &jsonFunction, const std::optional<ClassMap::JsonFunction> &oldJsonFunction = std::nullopt, bool argcMismatch = false) {
             std::stringstream ss;
 
             ss << "/*\n\t";
@@ -314,11 +319,12 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                 ss << "OSW_UNSAFE_WARNING\n\t";
             }
 
-            if (function.has_value()) {
-                ss << (function->virtualFunction ? "virtual " : "")
+            if (function.has_value() && function->index() == 0) {
+                HeaderFunction headerFunc = std::get<HeaderFunction>(function.value());
+                ss << (headerFunc.virtualFunction ? "virtual " : "")
                    << "auto "
-                   << function->name
-                   << "(" << [args = function->arguments]() -> std::string {
+                   << headerFunc.name
+                   << "(" << [args = headerFunc.arguments]() -> std::string {
                        std::string output;
 
                        for (int i = 0; i < args.size(); i++) {
@@ -330,9 +336,12 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
 
                        return output;
                    }()
-                   << ")" << (function->constFunction ? " const " : " ")
-                   << "-> " << function->indefiniteReturn
-                   << (function->pureVirtualFunction ? " = 0;" : ";");
+                   << ")" << (headerFunc.constFunction ? " const " : " ")
+                   << "-> " << headerFunc.indefiniteReturn
+                   << (headerFunc.pureVirtualFunction ? " = 0;" : ";");
+            }
+            else if (function.has_value() && function->index() == 1) {
+                
             }
             else if (jsonFunction.has_value()) {
                 ss << "virtual auto "               // Most probably a virtual function if it's in a class map, never seen different
@@ -387,11 +396,11 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                                 // Would compare both argc, but dumped JSON file argc seemed to be inaccurate? Por que?? é estúpido
                                 // TODO: BIG TODO: Get a copy of a newer dump and headers, and incorperate checks
                                 // with dumps from steamworks_dumper to check serialization changes
-                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction)}});
+                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction)}});
                             }
                             else {
                                 // Function size (argc) doesn't match and has changed
-                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction, true)}});
+                                m_foundTypes->emplace(newClassMapFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, newClassMapFunction, oldClassMapFunction, true)}});
                             }
 
                         }
@@ -479,7 +488,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                             std::string stringFunc = GenerateStringFunction(headerFunction, matchedJsonFunction, oldClassMapFunction, (matchedJsonFunction.has_value() ? false : true));
 
                             if (it == m_foundTypes->end()) {
-                                m_foundTypes->emplace(matchedJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, stringFunc}});
+                                m_foundTypes->emplace(matchedJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{headerFunction, stringFunc}});
                             }
                             else {
                                 bool found{false};
@@ -499,7 +508,49 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                             // Unknown function in the class map.
                             // Give warning. (Boo)
                             std::cerr << "Found unknown function " << headerFunction.name << " in file " << m_oldHeaderPath->string() << std::endl;
-                            m_foundTypes->emplace(std::nullopt, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, std::nullopt, oldClassMapFunction)}});
+                            m_foundTypes->emplace(std::nullopt, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{headerFunction, GenerateStringFunction(headerFunction, std::nullopt, oldClassMapFunction)}});
+                        }
+                    }
+                }
+                else if (IsStructReturnDefine(curLine)) {
+                    static const std::regex MACRO_REGEX(R"rgx((?:^\s*)([\w]+)\s*\(([^)]*)\)\s*?)rgx");
+                    std::smatch macroMatch;
+                    std::regex_match(curLine.cbegin(), curLine.cend(), macroMatch, MACRO_REGEX);
+
+                    std::smatch macroParamsMatch;
+                    std::regex_match(macroMatch[2].str().cbegin(), macroMatch[2].str().cend(), macroParamsMatch, PARAM_REGEX);
+
+                    std::string returnType(macroParamsMatch[1].str());
+                    std::string functionName(macroParamsMatch[2].str());
+
+                    std::vector<std::pair<std::string, std::string>> functionParameters;
+
+                    for (std::smatch::iterator it = macroParamsMatch.cbegin() + 3; it != macroParamsMatch.cend(); it += 2) {
+                        functionParameters.push_back(std::make_pair(it->str(), ((it + 1) != macroParamsMatch.cend() ? (it + 1)->str() : std::string())));
+                    }
+
+                    // Work on matching to a JSON Function
+                    for (const auto &jsonFunction : m_classMap.GetFunctions()) {
+                        std::any currentClassMapFound = IsFunctionInClassMap(functionName, m_classMap);
+                        std::any oldClassMapFound = IsFunctionInClassMap(functionName, oldJsonMap.value_or(ClassMap{}));
+
+                        std::string stringFunction;
+                        if (currentClassMapFound.has_value() && currentClassMapFound.type() == typeid(ClassMap::JsonFunction)) {
+                            ClassMap::JsonFunction currentJsonFunction = std::any_cast<ClassMap::JsonFunction>(currentClassMapFound);
+                            std::optional<ClassMap::JsonFunction> oldJsonFunction = (oldClassMapFound.has_value() ? (oldClassMapFound.type() == typeid(ClassMap::JsonFunction) ? std::make_optional(std::any_cast<ClassMap::JsonFunction>(oldClassMapFound)) : std::nullopt) : std::nullopt);
+
+                            if (functionParameters.size() + 1 == currentJsonFunction.serializedArgs.size() + currentJsonFunction.serializedReturns.size()) {
+                                m_foundTypes->emplace(currentJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{macroMatch.str(), GenerateStringFunction(macroMatch.str(), currentJsonFunction, oldJsonFunction)}});
+                            }
+                            else {
+                                m_foundTypes->emplace(currentJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{macroMatch.str(), GenerateStringFunction(macroMatch.str(), currentJsonFunction, oldJsonFunction, true)}});
+                            }
+                        }
+                        else if (currentClassMapFound.has_value() && currentClassMapFound.type() == typeid(std::list<ClassMap::JsonFunction>)) {
+
+                        }
+                        else {
+
                         }
                     }
                 }
@@ -580,7 +631,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                         auto found = m_foundTypes->find(jsonFunction);
 
                         if (found == m_foundTypes->cend()) {
-                            m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{jsonFunction, stringFunction}});
+                            m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{jsonFunction, stringFunction}});
                         }
                         else {
                             std::size_t sameArgCountInFound = std::count_if(found->second.cbegin(), found->second.cend(), [jsonFunction](const auto &element) -> bool {
@@ -616,7 +667,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                         stringFunction = GenerateStringFunction(std::nullopt, jsonFunction, std::nullopt, true);
                         auto found = m_foundTypes->find(jsonFunction);
                         if (found == m_foundTypes->cend()) {
-                            m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{jsonFunction, stringFunction}});
+                            m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{jsonFunction, stringFunction}});
                         }
                         else {
                             std::size_t sameArgCountInFound = std::count_if(found->second.cbegin(), found->second.cend(), [jsonFunction](const auto &element) -> bool {
@@ -658,7 +709,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                     }
                 }
                 
-                m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>{{jsonFunction, stringFunction}});
+                m_foundTypes->emplace(jsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{jsonFunction, stringFunction}});
             }
         }
 
@@ -730,6 +781,25 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
             }
         }
 
+        inline std::any IsFunctionInClassMap(const std::string &functionName, const ClassMap &classMap) const {
+            std::list<ClassMap::JsonFunction> occ;
+            for (const ClassMap::JsonFunction &jsonFunctionCur : classMap.GetFunctions()) {
+                if (functionName == jsonFunctionCur.name) {
+                    occ.push_back(jsonFunctionCur);
+                }
+            }
+
+            if (occ.size() == 1) {
+                return *occ.begin();
+            }
+            else if (occ.size() > 1) {
+                return occ;
+            }
+            else {
+                return {};
+            }
+        }
+
         ClassMap m_classMap;
 
         // Custom comparator for std::map
@@ -747,7 +817,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
         };
 
 
-        std::optional<std::map<std::optional<ClassMap::JsonFunction>, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction>>, std::string>>, OptionalComparator>> m_foundTypes;
+        std::optional<std::map<std::optional<ClassMap::JsonFunction>, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>, OptionalComparator>> m_foundTypes;
 };
 
 template<>
