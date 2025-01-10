@@ -184,6 +184,14 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
             bool constFunction{};
         };
 
+        struct MacroFunction {
+            std::string name;
+            std::size_t argc;
+            std::string indefiniteReturn;
+
+            std::vector<std::pair<std::string, std::string>> arguments;
+        };
+
         // TODO: Implement diff tracker between old JSON dump and new JSON dump
         struct FunctionDifferences {
             std::list<std::pair<std::size_t, std::size_t>> differences;
@@ -233,7 +241,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
             return function;
         } 
 
-        inline const std::string GenerateStringFunction(std::optional<std::variant<HeaderFunction, std::string>> function, const std::optional<ClassMap::JsonFunction> &jsonFunction, const std::optional<ClassMap::JsonFunction> &oldJsonFunction = std::nullopt, bool argcMismatch = false) {
+        inline const std::string GenerateStringFunction(std::optional<std::variant<HeaderFunction, MacroFunction>> function, const std::optional<ClassMap::JsonFunction> &jsonFunction, const std::optional<ClassMap::JsonFunction> &oldJsonFunction = std::nullopt, bool argcMismatch = false) {
             std::stringstream ss;
 
             ss << "/*\n\t";
@@ -341,7 +349,24 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                    << (headerFunc.pureVirtualFunction ? " = 0;" : ";");
             }
             else if (function.has_value() && function->index() == 1) {
-                
+                MacroFunction macroFunction = std::get<MacroFunction>(function.value());
+                ss << "STEAMWORKS_STRUCT_RETURN("
+                   << macroFunction.indefiniteReturn
+                   << ", " << macroFunction.name
+                   << (macroFunction.arguments.empty() ? "" : ", ")
+                   << [args = macroFunction.arguments]() -> std::string {
+                       std::string output;
+
+                       for (int i = 0; i < args.size(); i++) {
+                           const auto &[type, name] = args.at(i);
+                           output += type + (name.empty() ? "" : " " + name);
+                           if (i + 1 < args.size()) {
+                               output += ", ";
+                           }
+                       }
+
+                       return output;
+                   }() << ")";
             }
             else if (jsonFunction.has_value()) {
                 ss << "virtual auto "               // Most probably a virtual function if it's in a class map, never seen different
@@ -514,44 +539,50 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                 }
                 else if (IsStructReturnDefine(curLine)) {
                     static const std::regex MACRO_REGEX(R"rgx((?:^\s*)([\w]+)\s*\(([^)]*)\)\s*?)rgx");
+                    static const std::regex PARAM_REGEX(R"rgx(((const\s+)?((?:[\w:\[\]]+)(?:<[^>]+>)?)(\s+const)?\s*(\*|\&)?\s*([\w\[\]]+)?\s*(?=,|$)))rgx");
                     std::smatch macroMatch;
-                    std::regex_match(curLine.cbegin(), curLine.cend(), macroMatch, MACRO_REGEX);
+                    std::regex_search(curLine.cbegin(), curLine.cend(), macroMatch, MACRO_REGEX);
 
-                    std::smatch macroParamsMatch;
-                    std::regex_match(macroMatch[2].str().cbegin(), macroMatch[2].str().cend(), macroParamsMatch, PARAM_REGEX);
+                    std::string macroParamsString = macroMatch[2].str();
 
-                    std::string returnType(macroParamsMatch[1].str());
-                    std::string functionName(macroParamsMatch[2].str());
+                    std::sregex_iterator macroParamsIterator(macroParamsString.cbegin(), macroParamsString.cend(), PARAM_REGEX);
 
-                    std::vector<std::pair<std::string, std::string>> functionParameters;
+                    MacroFunction macroFunction;
 
-                    for (std::smatch::iterator it = macroParamsMatch.cbegin() + 3; it != macroParamsMatch.cend(); it += 2) {
-                        functionParameters.push_back(std::make_pair(it->str(), ((it + 1) != macroParamsMatch.cend() ? (it + 1)->str() : std::string())));
+                    macroFunction.indefiniteReturn = macroParamsIterator->str();
+                    macroParamsIterator++;
+
+                    macroFunction.name = macroParamsIterator->str();
+                    macroParamsIterator++;
+
+                    while (macroParamsIterator != std::sregex_iterator()) {
+                        macroFunction.arguments.push_back(std::make_pair(macroParamsIterator->str(), (std::next(macroParamsIterator) != std::sregex_iterator() ? std::next(macroParamsIterator)->str() : std::string())));
+                        std::advance(macroParamsIterator, 2);
                     }
 
+                    macroFunction.argc = macroFunction.arguments.size() + 1;
+
                     // Work on matching to a JSON Function
-                    for (const auto &jsonFunction : m_classMap.GetFunctions()) {
-                        std::any currentClassMapFound = IsFunctionInClassMap(functionName, m_classMap);
-                        std::any oldClassMapFound = IsFunctionInClassMap(functionName, oldJsonMap.value_or(ClassMap{}));
+                    std::any currentClassMapFound = IsFunctionInClassMap(macroFunction.name, m_classMap);
+                    std::any oldClassMapFound = IsFunctionInClassMap(macroFunction.name, oldJsonMap.value_or(ClassMap{}));
 
-                        std::string stringFunction;
-                        if (currentClassMapFound.has_value() && currentClassMapFound.type() == typeid(ClassMap::JsonFunction)) {
-                            ClassMap::JsonFunction currentJsonFunction = std::any_cast<ClassMap::JsonFunction>(currentClassMapFound);
-                            std::optional<ClassMap::JsonFunction> oldJsonFunction = (oldClassMapFound.has_value() ? (oldClassMapFound.type() == typeid(ClassMap::JsonFunction) ? std::make_optional(std::any_cast<ClassMap::JsonFunction>(oldClassMapFound)) : std::nullopt) : std::nullopt);
+                    std::string stringFunction;
+                    if (currentClassMapFound.has_value() && currentClassMapFound.type() == typeid(ClassMap::JsonFunction)) {
+                        ClassMap::JsonFunction currentJsonFunction = std::any_cast<ClassMap::JsonFunction>(currentClassMapFound);
+                        std::optional<ClassMap::JsonFunction> oldJsonFunction = (oldClassMapFound.has_value() ? (oldClassMapFound.type() == typeid(ClassMap::JsonFunction) ? std::make_optional(std::any_cast<ClassMap::JsonFunction>(oldClassMapFound)) : std::nullopt) : std::nullopt);
 
-                            if (functionParameters.size() + 1 == currentJsonFunction.serializedArgs.size() + currentJsonFunction.serializedReturns.size()) {
-                                m_foundTypes->emplace(currentJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{macroMatch.str(), GenerateStringFunction(macroMatch.str(), currentJsonFunction, oldJsonFunction)}});
-                            }
-                            else {
-                                m_foundTypes->emplace(currentJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{macroMatch.str(), GenerateStringFunction(macroMatch.str(), currentJsonFunction, oldJsonFunction, true)}});
-                            }
-                        }
-                        else if (currentClassMapFound.has_value() && currentClassMapFound.type() == typeid(std::list<ClassMap::JsonFunction>)) {
-
+                        if (macroFunction.arguments.size() + 1 == currentJsonFunction.serializedArgs.size() + currentJsonFunction.serializedReturns.size()) {
+                            m_foundTypes->emplace(currentJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{macroMatch.str(), GenerateStringFunction(macroFunction, currentJsonFunction, oldJsonFunction)}});
                         }
                         else {
-
+                            m_foundTypes->emplace(currentJsonFunction, std::vector<std::pair<std::optional<std::variant<HeaderFunction, ClassMap::JsonFunction, std::string>>, std::string>>{{macroMatch.str(), GenerateStringFunction(macroFunction, currentJsonFunction, oldJsonFunction, true)}});
                         }
+                    }
+                    else if (currentClassMapFound.has_value() && currentClassMapFound.type() == typeid(std::list<ClassMap::JsonFunction>)) {
+
+                    }
+                    else {
+
                     }
                 }
             }
