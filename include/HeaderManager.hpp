@@ -688,7 +688,9 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                                 continue;
                             }
                             else {
-                                found->second.emplace_back(jsonFunction, stringFunction);
+                                std::string commenting = stringFunction.substr(0, stringFunction.find_last_of("*/") + 1);
+                                std::string function = "\n\t/*" + stringFunction.substr(stringFunction.find_last_of("*/") + 1, stringFunction.size()) + "\n\t*/";
+                                found->second.emplace_back(jsonFunction, commenting + function);
                             }
                         }
 
@@ -725,7 +727,9 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
                                 continue;
                             }
                             else {
-                                found->second.emplace_back(jsonFunction, stringFunction);
+                                std::string commenting = stringFunction.substr(0, stringFunction.find_last_of("*/") + 1);
+                                std::string function = "\n\t/*" + stringFunction.substr(stringFunction.find_last_of("*/") + 1, stringFunction.size()) + "\n\t*/";
+                                found->second.emplace_back(jsonFunction, commenting + function);
                             }
                         }
                     }
@@ -746,6 +750,7 @@ class HeaderManager<ClassMap> final : public HeaderManagerBase {
 
         inline void GenerateContent() final {
             m_generatedHeader << "osw_abstract_class OSW_UNSAFE_INTERFACE " << m_classMap.GetClassName() << " {" << std::endl;
+            m_generatedHeader << "public:\n" << std::endl;
             for (const auto &[jsonFunction, functionPairVector] : *m_foundTypes) {
                 for (const auto &[oldHeaderFunction, stringFunction] : functionPairVector) {
                     m_generatedHeader << "\t" << stringFunction << "\n\n";

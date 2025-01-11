@@ -88,7 +88,8 @@ int main(int argc, char **argv) {
         // Find a match for the JSON Dump in the old headers
         std::optional<std::filesystem::path> matchedOldHeader;
         for (const std::filesystem::path &match : std::filesystem::directory_iterator(oldHeaderDirectory)) {
-            if (currentNewDumpFile.filename().string().substr(0, currentNewDumpFile.filename().string().find("Map.json")).append(".h") == match.filename().string()) {
+            std::cout << currentNewDumpFile.filename().string().substr(0, currentNewDumpFile.filename().string().find("Map.json")).append(".hpp") << " == " << match.filename().string() << std::endl;
+            if (currentNewDumpFile.filename().string().substr(0, currentNewDumpFile.filename().string().find("Map.json")).append(".hpp") == match.filename().string()) {
                 matchedOldHeader = match;
             }
         }
